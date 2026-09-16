@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Affiliate Tool — protótipo visual</title>
+    <meta
+      name="description"
+      content="Protótipo interativo da plataforma de afiliados: vitrine, checkout Pix, painel e admin. Sem backend."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ink: { 950: "#05070c", 900: "#0a0e16", 800: "#101826", 700: "#182132" },
+              line: "#243044",
+              gold: { 400: "#f0d78a", 500: "#e8c36a", 600: "#c9a24a" },
+              aqua: { 400: "#7ff0dc", 500: "#3ee0c4", 600: "#1fb89e" },
+              mist: { 200: "#e7edf7", 400: "#9aa8bd", 500: "#7b889c" },
+            },
+            fontFamily: {
+              sans: ["Outfit", "ui-sans-serif", "system-ui", "sans-serif"],
+              display: ["Syne", "Outfit", "sans-serif"],
+              mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
+            },
+            boxShadow: {
+              glow: "0 0 80px -20px rgba(62,224,196,0.35)",
+              gold: "0 0 60px -18px rgba(232,195,106,0.45)",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { background: #05070c; }
+      body { min-height: 100dvh; }
+      .mesh {
+        background:
+          radial-gradient(1200px 500px at 12% -10%, rgba(62, 224, 196, 0.14), transparent 55%),
+          radial-gradient(900px 420px at 110% 0%, rgba(232, 195, 106, 0.12), transparent 50%),
+          radial-gradient(700px 500px at 50% 120%, rgba(62, 80, 180, 0.18), transparent 50%),
+          #05070c;
+      }
+      .grid-fade {
+        background-image:
+          linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: radial-gradient(ellipse at 50% 0%, black 20%, transparent 75%);
+      }
+      .noise::after {
+        content: "";
+        pointer-events: none;
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        opacity: 0.045;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
+      }
+      .glass {
+        background: linear-gradient(180deg, rgba(16,24,38,0.78), rgba(10,14,22,0.72));
+        backdrop-filter: blur(22px);
+        border: 1px solid rgba(255,255,255,0.06);
+      }
+      .sheen {
+        position: relative;
+        overflow: hidden;
+      }
+      .sheen::before {
+        content: "";
+        position: absolute;
+        inset: -40% auto -40% -30%;
+        width: 40%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+        transform: skewX(-18deg);
+        animation: sheen 7s ease-in-out infinite;
+      }
+      @keyframes sheen {
+        0%, 70% { transform: translateX(-120%) skewX(-18deg); }
+        100% { transform: translateX(620%) skewX(-18deg); }
+      }
+      @keyframes pulse-dot {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.7); opacity: 0.35; }
+      }
+      .live-dot::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        background: inherit;
+        animation: pulse-dot 1.8s ease-out infinite;
+      }
+      [data-screen] { display: none; }
+      [data-screen].is-on {
+        display: block;
+        animation: rise 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes rise {
+        from { opacity: 0; transform: translateY(10px) scale(0.992); }
+        to { opacity: 1; transform: none; }
+      }
+      .nav-btn.is-active {
+        background: linear-gradient(90deg, rgba(62,224,196,0.16), rgba(232,195,106,0.08));
+        color: #e7edf7;
+        box-shadow: inset 0 0 0 1px rgba(62,224,196,0.28);
+      }
+      .qr-cell { width: 8px; height: 8px; border-radius: 1px; }
+      kbd {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.04);
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-thumb { background: #243044; border-radius: 99px; }
+      .chart-bar { transform-origin: bottom; animation: grow 0.9s cubic-bezier(0.16,1,0.3,1) both; }
+      @keyframes grow { from { transform: scaleY(0.08); opacity: 0.2; } }
+      @media (prefers-reduced-motion: reduce) {
+        .sheen::before, .live-dot::after, [data-screen].is-on, .chart-bar { animation: none !important; }
+      }
+    </style>
+  </head>
+  <body class="mesh noise font-sans text-mist-200 antialiased">
+    <div class="pointer-events-none fixed inset-0 grid-fade"></div>
+
+    <div class="relative z-10 mx-auto flex min-h-dvh max-w-[1440px] flex-col lg:flex-row">
+      <aside class="glass lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-[260px] lg:shrink-0 lg:flex-col lg:border-r lg:border-white/5">
+        <div class="flex items-center justify-between gap-3 px-5 py-4 lg:block">
+          <div class="flex items-center gap-3">
+            <span class="relative grid size-9 place-items-center rounded-xl bg-gradient-to-br from-aqua-500 to-gold-500 shadow-glow">
+              <span class="size-2 rounded-full bg-ink-950"></span>
+            </span>
+            <div>
+              <p class="font-display text-base font-bold tracking-tight text-white">Affiliate Tool</p>
+              <p class="font-mono text-[10px] uppercase tracking-[0.18em] text-mist-500">prototype · visual</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="rounded-lg border border-white/10 px-2 py-1 text-xs text-mist-400 lg:hidden"
+            data-open-nav
+          >
+            Telas
+          </button>
+        </div>
+
+        <nav id="side-nav" class="hidden flex-1 space-y-1 px-3 pb-4 lg:block">
+          <p class="px-3 pb-2 pt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-mist-500">Explorar</p>
+          <button class="nav-btn is-active flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-mist-400 transition hover:bg-white/5" data-go="home">
+            <span class="font-mono text-[11px] text-aqua-500">01</span> Visão geral
+          </button>
+          <button class="nav-btn flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-mist-400 transition hover:bg-white/5" data-go="store">
+            <span class="font-mono text-[11px] text-gold-500">02</span> Vitrine
+          </button>
+          <button class="nav-btn flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-mist-400 transition hover:bg-white/5" data-go="checkout">
+            <span class="font-mono text-[11px] text-gold-500">03</span> Checkout Pix
+          </button>
+          <button class="nav-btn flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-mist-400 transition hover:bg-white/5" data-go="affiliate">
+            <span class="font-mono text-[11px] text-aqua-500">04</span> Painel afiliado
+          </button>
+          <button class="nav-btn flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-mist-400 transition hover:bg-white/5" data-go="admin">
+            <span class="font-mono text-[11px] text-aqua-500">05</span> Admin
+          </button>
+        </nav>
+
+        <div class="mt-auto hidden border-t border-white/5 p-4 lg:block">
+          <button type="button" data-open-cmd class="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-mist-400 hover:border-aqua-500/40">
+            Buscar telas
+            <span class="flex gap-1"><kbd>⌘</kbd><kbd>K</kbd></span>
+          </button>
+          <p class="mt-3 text-[11px] leading-relaxed text-mist-500">
+            Protótipo estático. Dados fictícios, sem Pagar.me real e sem dados de cliente.
+          </p>
+        </div>
+      </aside>
+
+      <main class="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+        <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2 text-xs text-mist-500">
+            <span class="relative inline-flex size-2">
+              <span class="live-dot absolute inset-0 rounded-full bg-aqua-500"></span>
+              <span class="relative size-2 rounded-full bg-aqua-500"></span>
+            </span>
+            Demo interativa · sem backend
+          </div>
+          <div class="flex items-center gap-2">
+            <a
+              href="https://github.com/tiagoholanda31/affiliate-tool"
+              class="rounded-full border border-white/10 px-3 py-1.5 text-xs text-mist-300 transition hover:border-gold-500/50 hover:text-white"
+            >
+              Código no GitHub
+            </a>
+            <button type="button" data-open-cmd class="rounded-full bg-white/5 px-3 py-1.5 text-xs text-mist-300 hover:bg-white/10">
+              Atalhos
+            </button>
+          </div>
+        </header>
+
+        <!-- HOME -->
+        <section data-screen="home" class="is-on space-y-8">
+          <div class="relative overflow-hidden rounded-3xl border border-white/10 bg-ink-900/60 p-6 shadow-glow sm:p-10">
+            <div class="pointer-events-none absolute -right-16 -top-16 size-64 rounded-full bg-aqua-500/10 blur-3xl"></div>
+            <p class="font-mono text-[11px] uppercase tracking-[0.22em] text-aqua-500">self-hosted · pix · card · grants</p>
+            <h1 class="mt-3 max-w-3xl font-display text-4xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-6xl">
+              Afiliados com checkout próprio. Sem plataforma terceira.
+            </h1>
+            <p class="mt-5 max-w-2xl text-base leading-7 text-mist-400 sm:text-lg">
+              Links rastreados, Pix e cartão via Pagar.me, comissões em centavos com carência, pagamento manual e entrega digital por grant. Este preview replica o fluxo — clique e percorra o produto.
+            </p>
+            <div class="mt-8 flex flex-wrap gap-3">
+              <button data-go="store" class="sheen rounded-full bg-gradient-to-r from-aqua-500 to-aqua-600 px-5 py-2.5 text-sm font-semibold text-ink-950 shadow-glow">
+                Entrar na vitrine
+              </button>
+              <button data-go="admin" class="rounded-full border border-white/15 px-5 py-2.5 text-sm text-white hover:bg-white/5">
+                Ver o admin
+              </button>
+            </div>
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-3">
+            <article class="rounded-2xl border border-white/10 bg-ink-900/50 p-5">
+              <p class="font-mono text-[10px] uppercase tracking-widest text-gold-500">Atribuição</p>
+              <h2 class="mt-2 font-display text-xl text-white">Último clique, cookie JWT</h2>
+              <p class="mt-2 text-sm leading-6 text-mist-400">Cookie HttpOnly, janela configurável, bots ignorados. Venda sem cookie segue sem afiliado.</p>
+            </article>
+            <article class="rounded-2xl border border-white/10 bg-ink-900/50 p-5">
+              <p class="font-mono text-[10px] uppercase tracking-widest text-aqua-500">Dinheiro</p>
+              <h2 class="mt-2 font-display text-xl text-white">Centavos + basis points</h2>
+              <p class="mt-2 text-sm leading-6 text-mist-400">R$ 199,90 × 15% = 2998¢, half-even. Sem float. Hold de 7 dias antes do lote.</p>
+            </article>
+            <article class="rounded-2xl border border-white/10 bg-ink-900/50 p-5">
+              <p class="font-mono text-[10px] uppercase tracking-widest text-mist-400">Entrega</p>
+              <h2 class="mt-2 font-display text-xl text-white">Grant, não URL pública</h2>
+              <p class="mt-2 text-sm leading-6 text-mist-400">Token hasheado, prazo e teto de downloads. PDF/EPUB só depois do Pix pago.</p>
+            </article>
+          </div>
+
+          <div>
+            <div class="mb-4 flex items-end justify-between">
+              <h2 class="font-display text-2xl text-white">Percorra o fluxo</h2>
+              <p class="text-xs text-mist-500">cada etapa abre a tela correspondente</p>
+            </div>
+            <ol class="grid gap-2 md:grid-cols-6">
+              <li><button data-go="affiliate" class="w-full rounded-2xl border border-white/10 bg-ink-800/80 p-4 text-left hover:border-aqua-500/40"><span class="font-mono text-[10px] text-aqua-500">01</span><p class="mt-1 text-sm font-medium text-white">Cadastro</p><p class="text-xs text-mist-500">afiliado aguarda</p></button></li>
+              <li><button data-go="admin" class="w-full rounded-2xl border border-white/10 bg-ink-800/80 p-4 text-left hover:border-aqua-500/40"><span class="font-mono text-[10px] text-aqua-500">02</span><p class="mt-1 text-sm font-medium text-white">Aprovação</p><p class="text-xs text-mist-500">admin decide</p></button></li>
+              <li><button data-go="affiliate" class="w-full rounded-2xl border border-white/10 bg-ink-800/80 p-4 text-left hover:border-gold-500/40"><span class="font-mono text-[10px] text-gold-500">03</span><p class="mt-1 text-sm font-medium text-white">Link /r</p><p class="text-xs text-mist-500">código único</p></button></li>
+              <li><button data-go="checkout" class="w-full rounded-2xl border border-white/10 bg-ink-800/80 p-4 text-left hover:border-gold-500/40"><span class="font-mono text-[10px] text-gold-500">04</span><p class="mt-1 text-sm font-medium text-white">Checkout</p><p class="text-xs text-mist-500">Pix ou cartão</p></button></li>
+              <li><button data-go="affiliate" class="w-full rounded-2xl border border-white/10 bg-ink-800/80 p-4 text-left hover:border-aqua-500/40"><span class="font-mono text-[10px] text-aqua-500">05</span><p class="mt-1 text-sm font-medium text-white">Comissão</p><p class="text-xs text-mist-500">carência 7d</p></button></li>
+              <li><button data-go="admin" class="w-full rounded-2xl border border-white/10 bg-ink-800/80 p-4 text-left hover:border-gold-500/40"><span class="font-mono text-[10px] text-gold-500">06</span><p class="mt-1 text-sm font-medium text-white">Lote Pix</p><p class="text-xs text-mist-500">pagamento manual</p></button></li>
+            </ol>
+          </div>
+        </section>
+
+        <!-- STORE -->
+        <section data-screen="store" class="space-y-6">
+          <div>
+            <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-gold-500">programa de afiliados</p>
+            <h1 class="mt-1 font-display text-3xl text-white sm:text-4xl">Vitrine</h1>
+            <p class="mt-2 max-w-xl text-sm text-mist-400">O comprador chega por <span class="font-mono text-aqua-400">/r/ana7k2</span> ou direto. Sem conta. Checkout na sequência.</p>
+          </div>
+          <div class="grid gap-4 md:grid-cols-3">
+            <article class="group overflow-hidden rounded-3xl border border-white/10 bg-ink-900">
+              <div class="h-36 bg-gradient-to-br from-ink-700 via-[#163356] to-aqua-600/40 p-5">
+                <span class="rounded-full bg-black/30 px-2 py-1 font-mono text-[10px] uppercase text-gold-400">serviço</span>
+              </div>
+              <div class="p-5">
+                <h2 class="font-display text-lg text-white">Mentoria estratégica</h2>
+                <p class="mt-1 text-sm text-mist-400">4 sessões · diagnóstico e plano de divulgação.</p>
+                <div class="mt-4 flex items-end justify-between">
+                  <p class="text-xl font-semibold text-white">R$ 1.497,00</p>
+                  <p class="text-xs text-aqua-400">15% · R$ 224,55</p>
+                </div>
+                <button data-go="checkout" class="mt-4 w-full rounded-xl bg-white/5 py-2 text-sm text-white transition group-hover:bg-aqua-500 group-hover:text-ink-950">Comprar</button>
+              </div>
+            </article>
+            <article class="group overflow-hidden rounded-3xl border border-gold-500/30 bg-ink-900 shadow-gold">
+              <div class="h-36 bg-gradient-to-br from-[#3a2a12] via-[#8e7233] to-gold-500/50 p-5">
+                <span class="rounded-full bg-black/30 px-2 py-1 font-mono text-[10px] uppercase text-gold-400">digital</span>
+              </div>
+              <div class="p-5">
+                <h2 class="font-display text-lg text-white">E-book Operação Afiliada</h2>
+                <p class="mt-1 text-sm text-mist-400">PDF 84 pág. Download por grant após o Pix.</p>
+                <div class="mt-4 flex items-end justify-between">
+                  <p class="text-xl font-semibold text-white">R$ 97,00</p>
+                  <p class="text-xs text-aqua-400">30% · R$ 29,10</p>
+                </div>
+                <button data-go="checkout" class="mt-4 w-full rounded-xl bg-gold-500 py-2 text-sm font-semibold text-ink-950">Comprar agora</button>
+              </div>
+            </article>
+            <article class="group overflow-hidden rounded-3xl border border-white/10 bg-ink-900">
+              <div class="h-36 bg-gradient-to-br from-[#0b2440] to-[#2f7f7a]/50 p-5">
+                <span class="rounded-full bg-black/30 px-2 py-1 font-mono text-[10px] uppercase text-gold-400">serviço</span>
+              </div>
+              <div class="p-5">
+                <h2 class="font-display text-lg text-white">Workshop ao vivo</h2>
+                <p class="mt-1 text-sm text-mist-400">Turma mensal · vaga confirmada por e-mail.</p>
+                <div class="mt-4 flex items-end justify-between">
+                  <p class="text-xl font-semibold text-white">R$ 497,00</p>
+                  <p class="text-xs text-aqua-400">20% · R$ 99,40</p>
+                </div>
+                <button data-go="checkout" class="mt-4 w-full rounded-xl bg-white/5 py-2 text-sm text-white transition group-hover:bg-aqua-500 group-hover:text-ink-950">Comprar</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- CHECKOUT -->
+        <section data-screen="checkout" class="space-y-6">
+          <div>
+            <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-gold-500">pedido · atribuído a ana7k2</p>
+            <h1 class="mt-1 font-display text-3xl text-white">Checkout</h1>
+          </div>
+          <div class="grid gap-6 lg:grid-cols-[1fr_380px]">
+            <div class="space-y-4 rounded-3xl border border-white/10 bg-ink-900/60 p-6">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <h2 class="font-display text-2xl text-white">E-book Operação Afiliada</h2>
+                  <p class="mt-1 text-sm text-mist-400">Entrega digital · 5 downloads · 7 dias</p>
+                </div>
+                <p class="font-display text-2xl text-gold-500">R$ 97,00</p>
+              </div>
+              <div class="flex gap-2 rounded-2xl bg-ink-800 p-1">
+                <button type="button" id="tab-pix" class="flex-1 rounded-xl bg-aqua-500 py-2 text-sm font-semibold text-ink-950">Pix</button>
+                <button type="button" id="tab-card" class="flex-1 rounded-xl py-2 text-sm text-mist-400">Cartão</button>
+              </div>
+              <div id="pane-pix" class="space-y-4">
+                <div class="flex flex-col items-center gap-4 rounded-2xl border border-white/10 bg-ink-950/80 p-5 sm:flex-row">
+                  <div id="qr" class="grid grid-cols-[repeat(21,8px)] gap-px rounded-xl bg-white p-3" aria-hidden="true"></div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-xs text-mist-500">Expira em <span id="pix-timer" class="font-mono text-gold-400">29:00</span></p>
+                    <p id="pix-code" class="mt-2 break-all font-mono text-[11px] leading-5 text-mist-400">00020126580014br.gov.bcb.pix0136demo-grant-97...5802BR5911AFFILIATE</p>
+                    <button type="button" id="copy-pix" class="mt-3 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white hover:border-aqua-500/50">Copiar código</button>
+                  </div>
+                </div>
+                <button type="button" id="sim-pay" class="w-full rounded-2xl bg-gradient-to-r from-aqua-500 to-aqua-600 py-3 text-sm font-semibold text-ink-950 shadow-glow">
+                  Simular pagamento (webhook order.paid)
+                </button>
+                <div id="paid-box" hidden class="mt-4 rounded-2xl border border-aqua-500/40 bg-aqua-500/10 p-4">
+                  <p class="font-display text-lg text-white">Pago. Grant criado.</p>
+                  <p class="mt-1 text-sm text-mist-400">Comissão de R$ 29,10 em carência até 22/09. Download: <span class="font-mono text-aqua-400">/download/gt_8f3a</span></p>
+                </div>
+              </div>
+              <div id="pane-card" class="hidden space-y-3">
+                <input class="w-full rounded-xl border border-white/10 bg-ink-800 px-3 py-2 text-sm text-white outline-none ring-aqua-500 focus:ring-1" placeholder="Número do cartão · tokenizado no browser" />
+                <div class="grid grid-cols-2 gap-3">
+                  <input class="rounded-xl border border-white/10 bg-ink-800 px-3 py-2 text-sm text-white outline-none" placeholder="MM/AA" />
+                  <input class="rounded-xl border border-white/10 bg-ink-800 px-3 py-2 text-sm text-white outline-none" placeholder="CVV" />
+                </div>
+                <p class="text-xs text-mist-500">Em produção o cartão vira <span class="font-mono">tok_*</span> na Pagar.me. last4 0002 recusa. Este preview não envia dados.</p>
+                <button type="button" id="sim-card" class="w-full rounded-2xl border border-white/15 py-3 text-sm text-white hover:bg-white/5">Simular tokenização + captura</button>
+              </div>
+            </div>
+            <aside class="space-y-4">
+              <div class="rounded-3xl border border-white/10 bg-ink-900/60 p-5">
+                <p class="text-xs uppercase tracking-widest text-mist-500">Atribuição</p>
+                <p class="mt-2 font-mono text-sm text-aqua-400">if_ref · ANA7K2</p>
+                <p class="mt-1 text-sm text-mist-400">Último clique há 2h · janela 30 dias · IP distinto do afiliado.</p>
+              </div>
+              <div class="rounded-3xl border border-white/10 bg-ink-900/60 p-5">
+                <p class="text-xs uppercase tracking-widest text-mist-500">Segurança</p>
+                <ul class="mt-3 space-y-2 text-sm text-mist-400">
+                  <li>CSP nonce + connect-src api.pagar.me</li>
+                  <li>Webhook Basic Auth + re-fetch getOrder</li>
+                  <li>CPF do comprador cifrado em AES-GCM</li>
+                </ul>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- AFFILIATE -->
+        <section data-screen="affiliate" class="space-y-6">
+          <div class="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-aqua-500">painel · ana ribeiro</p>
+              <h1 class="mt-1 font-display text-3xl text-white">Suas comissões</h1>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-ink-900 px-4 py-2">
+              <p class="text-[10px] uppercase tracking-widest text-mist-500">seu link</p>
+              <div class="mt-1 flex items-center gap-2">
+                <code id="aff-link" class="font-mono text-xs text-gold-400">https://demo.affiliate.tool/r/ana7k2</code>
+                <button type="button" id="copy-link" class="rounded-lg bg-white/5 px-2 py-1 text-[11px] text-white">Copiar</button>
+              </div>
+            </div>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-4">
+            <div class="rounded-2xl border border-white/10 bg-ink-900/70 p-4"><p class="text-xs text-mist-500">Cliques (7d)</p><p class="mt-1 font-display text-3xl text-white" data-count="1284">0</p></div>
+            <div class="rounded-2xl border border-white/10 bg-ink-900/70 p-4"><p class="text-xs text-mist-500">Vendas pagas</p><p class="mt-1 font-display text-3xl text-white" data-count="37">0</p></div>
+            <div class="rounded-2xl border border-white/10 bg-ink-900/70 p-4"><p class="text-xs text-mist-500">Em carência</p><p class="mt-1 font-display text-3xl text-gold-400">R$ 870</p></div>
+            <div class="rounded-2xl border border-aqua-500/30 bg-aqua-500/10 p-4 shadow-glow"><p class="text-xs text-aqua-400">Disponível</p><p class="mt-1 font-display text-3xl text-white">R$ 2.410</p></div>
+          </div>
+          <div class="rounded-3xl border border-white/10 bg-ink-900/60 p-5">
+            <p class="text-sm text-mist-400">Receita atribuída · últimos 7 dias</p>
+            <div class="mt-4 flex h-36 items-end gap-2" id="bars"></div>
+          </div>
+          <div class="overflow-hidden rounded-3xl border border-white/10">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-ink-800 text-xs uppercase tracking-wider text-mist-500">
+                <tr><th class="px-4 py-3">Pedido</th><th>Produto</th><th>Status</th><th class="text-right">Comissão</th></tr>
+              </thead>
+              <tbody class="divide-y divide-white/5 bg-ink-900/40">
+                <tr><td class="px-4 py-3 font-mono text-xs text-mist-400">AF-10492</td><td>E-book Operação</td><td><span class="rounded-full bg-gold-500/15 px-2 py-0.5 text-[11px] text-gold-400">carência</span></td><td class="px-4 text-right text-white">R$ 29,10</td></tr>
+                <tr><td class="px-4 py-3 font-mono text-xs text-mist-400">AF-10488</td><td>Mentoria</td><td><span class="rounded-full bg-aqua-500/15 px-2 py-0.5 text-[11px] text-aqua-400">disponível</span></td><td class="px-4 text-right text-white">R$ 224,55</td></tr>
+                <tr><td class="px-4 py-3 font-mono text-xs text-mist-400">AF-10471</td><td>Workshop</td><td><span class="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-mist-400">paga</span></td><td class="px-4 text-right text-white">R$ 99,40</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ADMIN -->
+        <section data-screen="admin" class="space-y-6">
+          <div>
+            <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-gold-500">operação</p>
+            <h1 class="mt-1 font-display text-3xl text-white">Admin</h1>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-3">
+            <div class="rounded-2xl border border-white/10 bg-ink-900/70 p-4"><p class="text-xs text-mist-500">GMV 30d</p><p class="font-display text-3xl text-white">R$ 48.320</p></div>
+            <div class="rounded-2xl border border-white/10 bg-ink-900/70 p-4"><p class="text-xs text-mist-500">A pagar</p><p class="font-display text-3xl text-gold-400">R$ 6.140</p></div>
+            <div class="rounded-2xl border border-white/10 bg-ink-900/70 p-4"><p class="text-xs text-mist-500">Jobs</p><p class="font-display text-3xl text-aqua-400">ok</p><p class="text-[11px] text-mist-500">release 03:00 · reconcile 15 min</p></div>
+          </div>
+          <div class="grid gap-4 lg:grid-cols-2">
+            <div class="rounded-3xl border border-white/10 bg-ink-900/60 p-5">
+              <div class="mb-3 flex items-center justify-between">
+                <h2 class="font-display text-lg text-white">Fila de afiliados</h2>
+                <span id="pending-count" class="rounded-full bg-gold-500/15 px-2 py-0.5 text-xs text-gold-400">2 pendentes</span>
+              </div>
+              <ul id="pending-list" class="space-y-3"></ul>
+            </div>
+            <div class="rounded-3xl border border-white/10 bg-ink-900/60 p-5">
+              <h2 class="font-display text-lg text-white">Lote de pagamento</h2>
+              <p class="mt-1 text-sm text-mist-400">Ana Ribeiro · 4 comissões disponíveis</p>
+              <p class="mt-4 font-display text-3xl text-white">R$ 2.410,00</p>
+              <p class="mt-1 text-xs text-mist-500">Pix mascarado · ***.456.789-**</p>
+              <button type="button" id="mark-paid" class="mt-5 w-full rounded-2xl bg-gold-500 py-2.5 text-sm font-semibold text-ink-950">Marcar lote como pago</button>
+              <p id="payout-done" hidden class="mt-3 text-sm text-aqua-400">Lote PAID. E-mail de extrato enfileirado. AuditLog gravado.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toasts" class="pointer-events-none fixed bottom-4 right-4 z-[90] flex w-[min(92vw,340px)] flex-col gap-2"></div>
+
+    <div id="cmd" class="fixed inset-0 z-[100] hidden items-start justify-center bg-black/60 p-4 pt-[15vh] backdrop-blur-sm">
+      <div class="glass w-full max-w-lg overflow-hidden rounded-2xl shadow-glow">
+        <input id="cmd-input" class="w-full border-b border-white/10 bg-transparent px-4 py-3 text-sm text-white outline-none" placeholder="Ir para… ou ação" />
+        <ul id="cmd-list" class="max-h-72 overflow-auto p-2 text-sm"></ul>
+      </div>
+    </div>
+
+    <script>
+      const $ = (sel, root = document) => root.querySelector(sel);
+      const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+      const pending = [
+        { id: "1", name: "Marina Costa", handle: "@marina.afiliada", net: "Instagram" },
+        { id: "2", name: "Rafael Nunes", handle: "@rafa.codes", net: "YouTube" },
+      ];
+
+      function toast(title, detail) {
+        const el = document.createElement("div");
+        el.className = "pointer-events-auto rounded-2xl border border-aqua-500/30 bg-ink-800/95 px-4 py-3 text-sm text-white shadow-glow";
+        el.innerHTML = `<p class="font-medium">${title}</p>${detail ? `<p class="mt-0.5 text-xs text-mist-400">${detail}</p>` : ""}`;
+        $("#toasts").append(el);
+        setTimeout(() => el.remove(), 3200);
+      }
+
+      function go(view) {
+        $$("[data-screen]").forEach((n) => {
+          const on = n.dataset.screen === view;
+          n.classList.toggle("is-on", on);
+          n.setAttribute("aria-hidden", on ? "false" : "true");
+        });
+        $$(".nav-btn").forEach((n) => {
+          const on = n.dataset.go === view;
+          n.classList.toggle("is-active", on);
+          if (on) n.setAttribute("aria-current", "page");
+          else n.removeAttribute("aria-current");
+        });
+        if (location.hash.slice(1) !== view) location.hash = view;
+        if (view === "affiliate") animateCounts();
+        const nav = $("#side-nav");
+        if (window.matchMedia("(max-width: 1023px)").matches) nav.classList.add("hidden");
+      }
+
+      function animateCounts() {
+        $$("[data-count]").forEach((el) => {
+          const target = Number(el.dataset.count);
+          const start = performance.now();
+          const tick = (now) => {
+            const p = Math.min(1, (now - start) / 700);
+            el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3))).toLocaleString("pt-BR");
+            if (p < 1) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        });
+      }
+
+      function renderPending() {
+        const list = $("#pending-list");
+        $("#pending-count").textContent = pending.length ? `${pending.length} pendentes` : "fila vazia";
+        if (!pending.length) {
+          list.innerHTML = `<p class="text-sm text-mist-500">Nada na fila. Aprovação gera o código na primeira vez.</p>`;
+          return;
+        }
+        list.innerHTML = pending
+          .map(
+            (p) => `
+          <li class="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-ink-800/50 px-3 py-3">
+            <div>
+              <p class="text-sm text-white">${p.name}</p>
+              <p class="font-mono text-[11px] text-mist-500">${p.net} · ${p.handle}</p>
+            </div>
+            <div class="flex gap-2">
+              <button type="button" class="rounded-lg border border-white/10 px-2 py-1 text-xs text-mist-300" data-reject="${p.id}">Recusar</button>
+              <button type="button" class="rounded-lg bg-aqua-500 px-2 py-1 text-xs font-semibold text-ink-950" data-approve="${p.id}">Aprovar</button>
+            </div>
+          </li>`
+          )
+          .join("");
+      }
+
+      function buildQr() {
+        const box = $("#qr");
+        box.innerHTML = "";
+        for (let i = 0; i < 21 * 21; i++) {
+          const cell = document.createElement("span");
+          const y = Math.floor(i / 21);
+          const x = i % 21;
+          const finder =
+            (x < 7 && y < 7) || (x > 13 && y < 7) || (x < 7 && y > 13);
+          const on = finder ? x % 7 === 0 || y % 7 === 0 || (x > 1 && x < 5 && y > 1 && y < 5) : (Math.sin(x * 12.9 + y * 7.1) * 10) % 1 > 0.42;
+          cell.className = "qr-cell " + (on ? "bg-ink-950" : "bg-white");
+          box.append(cell);
+        }
+      }
+
+      let pixLeft = 29 * 60;
+      setInterval(() => {
+        if (!$("[data-screen='checkout']").classList.contains("is-on")) return;
+        if ($("#paid-box") && !$("#paid-box").classList.contains("hidden")) return;
+        pixLeft = Math.max(0, pixLeft - 1);
+        const m = String(Math.floor(pixLeft / 60)).padStart(2, "0");
+        const s = String(pixLeft % 60).padStart(2, "0");
+        $("#pix-timer").textContent = `${m}:${s}`;
+      }, 1000);
+
+      const bars = [40, 55, 38, 72, 64, 90, 81];
+      $("#bars").innerHTML = bars
+        .map((h, i) => `<div class="chart-bar flex-1 rounded-t-lg bg-gradient-to-t from-aqua-600/40 to-gold-500" style="height:${h}%; animation-delay:${i * 60}ms"></div>`)
+        .join("");
+
+      const cmds = [
+        { label: "Visão geral", run: () => go("home") },
+        { label: "Vitrine", run: () => go("store") },
+        { label: "Checkout Pix", run: () => go("checkout") },
+        { label: "Painel do afiliado", run: () => go("affiliate") },
+        { label: "Admin", run: () => go("admin") },
+        { label: "Simular pagamento Pix", run: () => { go("checkout"); $("#sim-pay").click(); } },
+        { label: "Copiar link de afiliado", run: () => $("#copy-link").click() },
+      ];
+
+      function renderCmd(q = "") {
+        const items = cmds.filter((c) => c.label.toLowerCase().includes(q.toLowerCase()));
+        $("#cmd-list").innerHTML = items
+          .map((c, i) => `<li><button type="button" data-cmd="${i}" class="flex w-full rounded-xl px-3 py-2 text-left text-mist-200 hover:bg-white/5">${c.label}</button></li>`)
+          .join("");
+        $("#cmd-list").dataset.filtered = JSON.stringify(items.map((c) => c.label));
+        $$("#cmd-list button").forEach((btn) => {
+          btn.onclick = () => {
+            const label = btn.textContent;
+            cmds.find((c) => c.label === label)?.run();
+            closeCmd();
+          };
+        });
+      }
+
+      function openCmd() {
+        $("#cmd").classList.remove("hidden");
+        $("#cmd").classList.add("flex");
+        renderCmd();
+        $("#cmd-input").value = "";
+        $("#cmd-input").focus();
+      }
+      function closeCmd() {
+        $("#cmd").classList.add("hidden");
+        $("#cmd").classList.remove("flex");
+      }
+
+      document.addEventListener("click", (e) => {
+        const goBtn = e.target.closest("[data-go]");
+        if (goBtn) go(goBtn.dataset.go);
+        if (e.target.closest("[data-open-cmd]")) openCmd();
+        if (e.target.closest("[data-open-nav]")) {
+          $("#side-nav").classList.toggle("hidden");
+          $("#side-nav").classList.add("block");
+        }
+        if (e.target.id === "cmd") closeCmd();
+        const approve = e.target.closest("[data-approve]");
+        if (approve) {
+          const i = pending.findIndex((p) => p.id === approve.dataset.approve);
+          const row = pending.splice(i, 1)[0];
+          renderPending();
+          toast("Afiliado aprovado", `${row.name} recebeu o código na primeira aprovação. E-mail fora da transação.`);
+        }
+        const reject = e.target.closest("[data-reject]");
+        if (reject) {
+          const i = pending.findIndex((p) => p.id === reject.dataset.reject);
+          pending.splice(i, 1);
+          renderPending();
+          toast("Cadastro recusado", "Motivo registrado. Afiliado pode reenviar.");
+        }
+      });
+
+      $("#tab-pix").onclick = () => {
+        $("#tab-pix").className = "flex-1 rounded-xl bg-aqua-500 py-2 text-sm font-semibold text-ink-950";
+        $("#tab-card").className = "flex-1 rounded-xl py-2 text-sm text-mist-400";
+        $("#pane-pix").classList.remove("hidden");
+        $("#pane-card").classList.add("hidden");
+      };
+      $("#tab-card").onclick = () => {
+        $("#tab-card").className = "flex-1 rounded-xl bg-aqua-500 py-2 text-sm font-semibold text-ink-950";
+        $("#tab-pix").className = "flex-1 rounded-xl py-2 text-sm text-mist-400";
+        $("#pane-card").classList.remove("hidden");
+        $("#pane-pix").classList.add("hidden");
+      };
+
+      async function copyText(value, ok, detail) {
+        try {
+          await navigator.clipboard.writeText(value);
+        } catch {
+          /* file:// or denied clipboard */
+        }
+        toast(ok, detail);
+      }
+      $("#copy-pix").onclick = () =>
+        copyText($("#pix-code").textContent.trim(), "Pix copiado", "Cole no app do banco. Neste demo o payload é fictício.");
+      $("#copy-link").onclick = () =>
+        copyText($("#aff-link").textContent.trim(), "Link copiado", "Cookie if_ref será gravado no /r/ana7k2.");
+      $("#sim-pay").onclick = () => {
+        $("#paid-box").hidden = false;
+        toast("order.paid", "Pedido PAID · grant · comissão PENDING 7 dias.");
+      };
+      $("#sim-card").onclick = () => toast("tok_fake gerado", "Sem chave pública, o app minta token local. last4 0002 recusa.");
+      $("#mark-paid").onclick = () => {
+        $("#payout-done").hidden = false;
+        toast("Payout PAID", "Comprovante poderia ser anexado aqui (PDF/JPEG ≤ 5 MB).");
+      };
+
+      $("#cmd-input").addEventListener("input", (e) => renderCmd(e.target.value));
+      $("#cmd").addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeCmd();
+      });
+      document.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+          e.preventDefault();
+          $("#cmd").classList.contains("hidden") ? openCmd() : closeCmd();
+        }
+        if (e.key === "Escape") closeCmd();
+      });
+
+      buildQr();
+      renderPending();
+      const initial = (location.hash || "#home").slice(1);
+      if (["home", "store", "checkout", "affiliate", "admin"].includes(initial)) go(initial);
+      window.addEventListener("hashchange", () => {
+        const view = (location.hash || "#home").slice(1);
+        if (["home", "store", "checkout", "affiliate", "admin"].includes(view)) go(view);
+      });
+    </script>
+  </body>
+</html>

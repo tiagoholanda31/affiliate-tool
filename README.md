@@ -8,6 +8,14 @@ The product UI is Brazilian Portuguese (`pt-BR`). This README and the architectu
 
 > This repository is a **genericized** snapshot of a production system. Client brand, domains, address, WhatsApp, and private files were removed. What remains is the tool itself so you can run, study, or fork it.
 
+## Visual prototype
+
+Click through the product in the browser — no install, no database, no secrets.
+
+**[Open the live prototype](https://tiagoholanda31.github.io/affiliate-tool/)** · or open [`prototype/index.html`](prototype/index.html) locally.
+
+Five screens: overview, storefront, Pix checkout (simulate `order.paid`), affiliate dashboard, admin queue. `⌘K` / `Ctrl+K` opens the command palette.
+
 ## What you get
 
 - Affiliate signup, email verification, admin approval / rejection / suspension
