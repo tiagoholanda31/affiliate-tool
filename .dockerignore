@@ -1,0 +1,33 @@
+node_modules
+.next
+.git
+.github
+coverage
+test-results
+playwright-report
+storage
+
+# Testes e seu instrumental não vão para a imagem de produção.
+tests
+**/*.test.ts
+**/*.test.tsx
+vitest.config.ts
+playwright.config.ts
+
+# Documentação e ferramentas de desenvolvimento.
+docs
+*.md
+.claude
+.vscode
+.editorconfig
+.prettierrc.json
+.prettierignore
+eslint.config.mjs
+
+# Segredos nunca entram na imagem — vêm do ambiente do EasyPanel.
+.env
+.env.*
+!.env.example
+
+Dockerfile
+docker-compose.yml

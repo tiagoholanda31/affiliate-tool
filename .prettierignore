@@ -1,0 +1,16 @@
+.next/
+out/
+build/
+coverage/
+node_modules/
+src/generated/
+pnpm-lock.yaml
+playwright-report/
+test-results/
+prisma/migrations/
+
+# Documentos de referência: reformatá-los a cada `pnpm format` encheria os diffs
+# das fatias de ruído. PROGRESS.md e DECISOES.md continuam formatados — são
+# escritos a cada sessão.
+docs/spec/
+docs/fatias/

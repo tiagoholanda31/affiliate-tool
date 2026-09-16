@@ -1,0 +1,41 @@
+# dependências
+/node_modules
+/.pnp
+.pnp.*
+
+# build
+/.next/
+/out/
+/build
+*.tsbuildinfo
+next-env.d.ts
+
+# código gerado
+/src/generated
+
+# testes
+/coverage
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
+
+# ambiente — nunca commitar valores reais
+.env
+.env.*
+!.env.example
+
+# arquivos enviados (produtos, materiais, comprovantes)
+/storage
+/storage-test
+
+# pacote de deploy (o .md fica versionado; o zip não)
+/deploy/*.zip
+
+# logs e sistema
+*.log
+npm-debug.log*
+.pnpm-debug.log*
+.DS_Store
+Thumbs.db
+*.pem

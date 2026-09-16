@@ -1,0 +1,580 @@
+// Affiliate Tool — schema Prisma
+//
+// Regras (ver CLAUDE.md e docs/spec/03-modelo-de-dados.md):
+// - Dinheiro sempre em centavos (Int). Percentuais em basis points (1500 = 15,00%).
+// - Datas em UTC no banco; conversão para America/Sao_Paulo só na exibição.
+// - Cada fatia adiciona apenas as tabelas que usa, para manter rastreabilidade.
+//
+// Fatia 00 (fundação): Setting, AuditLog, JobRun, EmailLog.
+// Fatia 01 (auth): User/Session/Account/Verification (Better Auth) + Affiliate.
+// Fatia 03 (produtos): Product, DigitalFile, ProductSlugHistory.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7: a URL de conexão vive em prisma.config.ts (CLI) e no driver adapter
+// (@prisma/adapter-pg em src/lib/db.ts) — não mais no schema.
+datasource db {
+  provider = "postgresql"
+}
+
+enum EmailStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+enum Role {
+  ADMIN
+  AFFILIATE
+}
+
+enum AffiliateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+  REMOVED
+}
+
+enum SocialNetwork {
+  INSTAGRAM
+  TIKTOK
+  YOUTUBE
+  FACEBOOK
+  LINKEDIN
+  WHATSAPP
+  OTHER
+}
+
+enum PixKeyType {
+  CPF
+  CNPJ
+  EMAIL
+  PHONE
+  RANDOM
+}
+
+enum ProductType {
+  SERVICE
+  DIGITAL
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum CommissionType {
+  PERCENT
+  FIXED
+}
+
+enum OrderSource {
+  CHECKOUT
+  MANUAL
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  CANCELED
+  REFUNDED
+  CHARGEDBACK
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+  MANUAL
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+enum CommissionStatus {
+  PENDING
+  AVAILABLE
+  PAID
+  REVERSED
+}
+
+enum PayoutStatus {
+  DRAFT
+  PAID
+}
+
+enum MaterialType {
+  IMAGE
+  PDF
+  TEXT
+  LINK
+}
+
+// ─── Better Auth ─────────────────────────────────────────────────────────────
+// Os quatro modelos abaixo espelham `getAuthTables()` do Better Auth 1.7
+// (node_modules/@better-auth/core/dist/db/get-tables.mjs). Os nomes de campo
+// precisam bater exatamente: o adapter do Prisma acessa `db.user`, `db.session`,
+// etc. e mapeia campo a campo. `role` é o único campo extra, declarado em
+// `user.additionalFields` de src/lib/auth.ts.
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  role          Role     @default(AFFILIATE)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions  Session[]
+  accounts  Account[]
+  affiliate Affiliate? @relation("owner")
+  /** Afiliados cujos cadastros este admin aprovou/reprovou/suspendeu/reativou/removeram. */
+  reviewedAffiliates Affiliate[] @relation("reviewedBy")
+  auditLogs AuditLog[] @relation("actor")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  /// Namespace do provedor. Para senha local: `local:credential`.
+  issuer                String
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  /// Hash scrypt gerado pelo Better Auth. Nunca sai do servidor.
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([issuer, accountId])
+  @@index([userId])
+}
+
+/// Tokens de uso único: verificação de e-mail e reset de senha.
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+// ─── Domínio ─────────────────────────────────────────────────────────────────
+
+/// Dados do afiliado. 1:1 com `User` de role `AFFILIATE`.
+/// A chave Pix nunca é gravada em claro: `pixKeyEncrypted` (AES-256-GCM) guarda
+/// o valor e `pixKeyMasked` é o que pode aparecer na tela.
+model Affiliate {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation("owner", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Definido na aprovação (fatia 02); imutável depois.
+  code String? @unique
+
+  phone         String // E.164
+  socialNetwork SocialNetwork
+  socialHandle  String
+
+  pixKeyType      PixKeyType
+  pixKeyEncrypted String
+  pixKeyMasked    String
+
+  status          AffiliateStatus @default(PENDING)
+  statusReason    String?
+  statusChangedAt DateTime        @default(now())
+  reviewedById    String?
+  reviewedBy      User?            @relation("reviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  /// Quantas vezes o cadastro foi reenviado após reprovação.
+  reviewCount     Int             @default(0)
+
+  termsVersion    String
+  termsAcceptedAt DateTime
+  termsIp         String
+
+  /// Reservado para split de pagamento no gateway (fase 2).
+  gatewayRecipientId String?
+  anonymizedAt       DateTime?
+  /// Preenchido quando o admin altera o código para um de vaidade (só uma vez).
+  codeEditedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clicks      Click[]
+  orders      Order[]
+  commissions Commission[]
+  adjustments CommissionAdjustment[]
+  payouts     Payout[]
+
+  @@index([status])
+}
+
+/// Linha única (id = 1) com os parâmetros operacionais do programa de afiliados.
+model Setting {
+  id                   Int      @id @default(1)
+  holdDays             Int      @default(7)
+  payoutDay            Int      @default(10)
+  attributionDays      Int      @default(30)
+  pixExpirationMinutes Int      @default(30)
+  downloadGrantDays    Int      @default(7)
+  downloadMaxCount     Int      @default(5)
+  termsVersion         String   @default("v1")
+  termsMarkdown        String
+  adminNotifyEmail     String
+  supportWhatsapp      String
+  updatedAt            DateTime @updatedAt
+}
+
+/// Trilha de auditoria: toda ação de admin e toda mudança de dinheiro/status.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  /// `SetNull` porque a trilha precisa sobreviver à remoção de quem agiu.
+  actor     User?    @relation("actor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole String // ADMIN | AFFILIATE | SYSTEM
+  action    String // affiliate.approve, product.archive, payout.pay, pix.reveal ...
+  entity    String
+  entityId  String
+  before    Json?
+  after     Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@index([actorId])
+}
+
+/// Registro de cada e-mail enviado, para reenvio e para a página admin "Sistema".
+model EmailLog {
+  id         String      @id @default(cuid())
+  to         String
+  template   String
+  status     EmailStatus @default(QUEUED)
+  providerId String?
+  attempts   Int         @default(0)
+  error      String?
+  /// HTML renderizado, gravado **apenas** pelo driver `log` (dev, test e e2e):
+  /// é daqui que o teste ponta a ponta tira o link de confirmação de e-mail.
+  /// Em produção (`resend`/`smtp`) fica nulo — o corpo do e-mail tem PII.
+  preview    String?
+  /// Props do template (+ replyTo?) para o job de reenvio. Limpo após SENT em produção.
+  payload    Json?
+  createdAt  DateTime    @default(now())
+  sentAt     DateTime?
+
+  @@index([status, createdAt])
+}
+
+/// Execução de job de cron (idempotente); alimenta a página admin "Sistema".
+model JobRun {
+  id         String    @id @default(cuid())
+  name       String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  ok         Boolean?
+  summary    Json?
+  error      String?
+
+  @@index([name, startedAt])
+}
+
+/// Serviço ou livro digital vendido na vitrine / via afiliados.
+model Product {
+  id                  String          @id @default(cuid())
+  slug                String          @unique
+  name                String
+  type                ProductType
+  status              ProductStatus   @default(DRAFT)
+  shortDescription    String
+  /// Markdown sanitizado na renderização (rehype-sanitize).
+  description         String
+  priceCents          Int
+  compareAtPriceCents Int?
+  commissionType      CommissionType
+  /// Basis points (PERCENT) ou centavos (FIXED).
+  commissionValue     Int
+  /// Caminho relativo da capa média (`…-md.webp`); `-sm`/`-lg` derivam por convenção.
+  coverImagePath      String?
+  allowPix            Boolean         @default(true)
+  allowCard           Boolean         @default(true)
+  maxInstallments     Int             @default(1)
+  deliveryNote        String?
+  sortOrder           Int             @default(0)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  digitalFile DigitalFile?
+  slugHistory ProductSlugHistory[]
+  clicks      Click[]
+  orders      Order[]
+  materials   Material[]
+
+  @@index([status, sortOrder])
+}
+
+/// Clique em link de afiliado (`/r/<code>` ou `/r/<code>/<slug>`).
+/// `ipHash` = sha256(ip + salt diário); bots gravam `isBot` e não entram nos KPIs.
+model Click {
+  id          String    @id @default(cuid())
+  affiliateId String
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id])
+  productId   String?
+  product     Product?  @relation(fields: [productId], references: [id])
+  ipHash      String
+  uaHash      String
+  referer     String?
+  isUnique    Boolean
+  isBot       Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  orders Order[]
+
+  @@index([affiliateId, createdAt])
+  @@index([affiliateId, ipHash, createdAt])
+  /// Funil global e purge por data (dashboard / cron).
+  @@index([createdAt])
+}
+
+/// Pedido de checkout (Pagar.me) ou venda manual (fatia 06).
+/// `accessTokenHash` autentica `/pedido/<publicCode>?t=`; o token em claro
+/// só sai no redirect e no e-mail.
+model Order {
+  id                String        @id @default(cuid())
+  publicCode        String        @unique
+  accessTokenHash   String        @unique
+  source            OrderSource
+  status            OrderStatus   @default(PENDING)
+  productId         String
+  product           Product       @relation(fields: [productId], references: [id])
+  productNameSnap   String
+  affiliateId       String?
+  affiliate         Affiliate?    @relation(fields: [affiliateId], references: [id])
+  clickId           String?
+  click             Click?        @relation(fields: [clickId], references: [id])
+  customerName      String
+  customerEmail     String
+  customerPhone     String?
+  customerDocEnc    String?
+  customerDocMasked String?
+  amountCents       Int
+  paymentMethod     PaymentMethod
+  installments      Int           @default(1)
+  gatewayOrderId    String?       @unique
+  gatewayChargeId   String?
+  pixQrCode         String?
+  pixQrCodeUrl      String?
+  pixExpiresAt      DateTime?
+  cardBrand         String?
+  cardLast4         String?
+  failureReason     String?
+  paidAt            DateTime?
+  refundedAt        DateTime?
+  notes             String?
+  createdById       String?
+  metadata          Json          @default("{}")
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  commission     Commission?
+  downloadGrants DownloadGrant[]
+
+  @@index([status, createdAt])
+  @@index([affiliateId, createdAt])
+  @@index([customerEmail])
+  @@index([productId, createdAt])
+  /// KPIs do mês e top rankings por receita paga.
+  @@index([status, paidAt])
+  @@index([affiliateId, status, paidAt])
+}
+
+/// Autorização temporária para baixar o arquivo de um pedido DIGITAL pago.
+/// O token em claro só sai no e-mail / link; no banco fica `tokenHash` (SHA-256).
+model DownloadGrant {
+  id             String    @id @default(cuid())
+  orderId        String
+  order          Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  maxDownloads   Int
+  downloadCount  Int       @default(0)
+  lastDownloadAt DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+/// Comissão 1:1 com pedido pago que tem afiliado. Snapshot da taxa na criação.
+model Commission {
+  id              String           @id @default(cuid())
+  orderId         String           @unique
+  order           Order            @relation(fields: [orderId], references: [id])
+  affiliateId     String
+  affiliate       Affiliate        @relation(fields: [affiliateId], references: [id])
+  amountCents     Int
+  baseAmountCents Int
+  rateType        CommissionType
+  rateValue       Int
+  status          CommissionStatus @default(PENDING)
+  availableAt     DateTime
+  paidAt          DateTime?
+  reversedAt      DateTime?
+  reversalReason  String?
+  /// Reservada em lote DRAFT ou liquidada em lote PAID.
+  payoutId        String?
+  payout          Payout?          @relation(fields: [payoutId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([affiliateId, status])
+  @@index([status, availableAt])
+  @@index([payoutId])
+  /// Comissões geradas no mês (dashboard).
+  @@index([createdAt])
+}
+
+/// Ajuste de saldo (estorno de comissão já paga, correção manual).
+/// `payoutId` nulo = aberto (ainda não abatido em lote).
+model CommissionAdjustment {
+  id          String    @id @default(cuid())
+  affiliateId String
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id])
+  amountCents Int
+  reason      String
+  orderId     String?
+  payoutId    String?
+  payout      Payout?   @relation(fields: [payoutId], references: [id])
+  /// User id do admin ou `"system"` para estorno automático.
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  @@index([affiliateId, payoutId])
+}
+
+/// Lote de pagamento de comissões a um afiliado (Pix manual).
+model Payout {
+  id             String       @id @default(cuid())
+  affiliateId    String
+  affiliate      Affiliate    @relation(fields: [affiliateId], references: [id])
+  status         PayoutStatus @default(DRAFT)
+  totalCents     Int
+  /// YYYY-MM no fuso America/Sao_Paulo.
+  referenceMonth String
+  paidAt         DateTime?
+  proofReference String?
+  proofPath      String?
+  notes          String?
+  createdById    String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  commissions    Commission[]
+  adjustments    CommissionAdjustment[]
+
+  @@index([affiliateId, status])
+  @@index([status, createdAt])
+}
+
+/// Evento de webhook do gateway (idempotência por `eventId`).
+model WebhookEvent {
+  id          String        @id @default(cuid())
+  provider    String
+  eventId     String        @unique
+  type        String
+  payload     Json
+  status      WebhookStatus @default(RECEIVED)
+  error       String?
+  receivedAt  DateTime      @default(now())
+  processedAt DateTime?
+
+  @@index([status, receivedAt])
+}
+
+/// Arquivo PDF/EPUB do produto digital. 1:1 com Product.
+model DigitalFile {
+  id           String   @id @default(cuid())
+  productId    String   @unique
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  storagePath  String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  sha256       String
+  createdAt    DateTime @default(now())
+}
+
+/// Slugs antigos de um produto — alimentam redirect 301 em `/p/[slug]`.
+model ProductSlugHistory {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
+
+/// Peça de divulgação (imagem, PDF, texto com `{{link}}` ou URL externa).
+/// Download autenticado; afiliado PENDING/SUSPENDED não acessa.
+model Material {
+  id            String       @id @default(cuid())
+  title         String
+  description   String?
+  type          MaterialType
+  /// Caminho relativo do arquivo original (IMAGE/PDF).
+  filePath      String?
+  fileName      String?
+  mimeType      String?
+  sizeBytes     Int?
+  /// Thumb WebP para listagem (só IMAGE); original permanece em `filePath`.
+  thumbPath     String?
+  textContent   String?
+  externalUrl   String?
+  productId     String?
+  product       Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  isActive      Boolean      @default(true)
+  sortOrder     Int          @default(0)
+  downloadCount Int          @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@index([productId, isActive])
+  @@index([type, isActive])
+}

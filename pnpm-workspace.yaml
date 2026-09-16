@@ -1,0 +1,8 @@
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
+minimumReleaseAgeExclude:
+  - "@playwright/test@1.63.0"
+  - eslint@10.10.0
+  - playwright-core@1.63.0
+  - playwright@1.63.0
